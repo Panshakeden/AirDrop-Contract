@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
-import {VRFCoordinatorV2Interface} from "@chainlink/contracts@0.8.0/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+// import {VRFCoordinatorV2Interface} from "@chainlink/contracts@0.8.0/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import {VRFConsumerBaseV2} from "@chainlink/contracts@0.8.0/src/v0.8/vrf/VRFConsumerBaseV2.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -13,7 +13,9 @@ contract AirDrop is VRFConsumerBaseV2{
     uint256 submissionStart;
     uint256 submissionEnd;
     IERC20 public token;
+    address[] public registeredUsers;
 
+        event WinnerSelected(address indexed winnerAddress);
     event RequestSent(uint256 requestId, uint32 numWords);
     event RequestFulfilled(uint256 requestId, uint256[] randomWords);
 
@@ -103,6 +105,7 @@ mapping (address=>bool) hasRegistered;
 
 function Register() external {
      require(!hasRegistered[msg.sender], "User registered already");
+    registeredUsers.push(msg.sender);
      hasRegistered[msg.sender]=true;
 }
 
@@ -113,6 +116,7 @@ function Login()external {
 
 function SubmitContent(string memory _Content)external {
     require(block.timestamp < submissionEnd, "Submission has ended");
+    require(hasRegistered[msg.sender], "User not registered");
     require(!users[msg.sender].ContentSubmission[_Content],"content already submitted");
 
     users[msg.sender].TotalEntries += contentPerCount;
@@ -136,7 +140,7 @@ function SubmitContent(string memory _Content)external {
 
      // Assumes the subscription is funded sufficiently.
     function requestRandomWords()
-        external
+        internal
         // onlyOwner
         returns (uint256 requestId)
     {
@@ -176,6 +180,22 @@ function SubmitContent(string memory _Content)external {
         require(s_requests[_requestId].exists, "request not found");
         RequestStatus memory request = s_requests[_requestId];
         return (request.fulfilled, request.randomWords);
+    }
+
+
+     function selectWinner() external {
+        // Ensure that there are enough participants
+        require(registeredUsers.length >= 3, "There must be at least 3 participants.");
+
+        // Generate a random number
+        uint256 randomNumber = requestRandomWords();
+
+        // Calculate the index of the winner using the random number
+        uint256 index = randomNumber % registeredUsers.length;
+
+        // Get the address of the winner from the participants array
+        address winnerAddress = registeredUsers[index];
+        emit WinnerSelected(winnerAddress);
     }
 
 
