@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
-// import {VRFCoordinatorV2Interface} from "@chainlink/contracts@0.8.0/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+import {VRFCoordinatorV2Interface} from "@chainlink/contracts@0.8.0/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import {VRFConsumerBaseV2} from "@chainlink/contracts@0.8.0/src/v0.8/vrf/VRFConsumerBaseV2.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-
-
-contract AirDrop is VRFConsumerBaseV2{
-    
+contract AirDrop is VRFConsumerBaseV2 {
     uint256 contentPerCount;
     address owner;
     uint256 submissionStart;
@@ -15,18 +12,19 @@ contract AirDrop is VRFConsumerBaseV2{
     IERC20 public token;
     address[] public registeredUsers;
 
-        event WinnerSelected(address indexed winnerAddress);
+    mapping(address => uint256) public ContentRewards;
+
+    event WinnerSelected(address indexed winnerAddress);
+
     event RequestSent(uint256 requestId, uint32 numWords);
     event RequestFulfilled(uint256 requestId, uint256[] randomWords);
 
-
-      struct RequestStatus {
+    struct RequestStatus {
         bool fulfilled; // whether the request has been successfully fulfilled
         bool exists; // whether a requestId exists
         uint256[] randomWords;
     }
-    mapping(uint256 => RequestStatus)
-        public s_requests; /* requestId --> requestStatus */
+    mapping(uint256 => RequestStatus) public s_requests; /* requestId --> requestStatus */
     VRFCoordinatorV2Interface COORDINATOR;
 
     // Your subscription ID.
@@ -62,39 +60,33 @@ contract AirDrop is VRFConsumerBaseV2{
      * COORDINATOR: 0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed
      */
 
- struct User{
-    uint256 TotalEntries;
-    mapping (string=>bool) ContentSubmission;
- }   
+    struct User {
+        uint256 TotalEntries;
+        mapping(string => bool) ContentSubmission;
+    }
 
-mapping (address=>User) public users; 
-mapping (address=>bool) hasRegistered;
+    mapping(address => User) public users;
+    mapping(address => bool) hasRegistered;
 
-// constructor(uint256 _requiredEntries,uint256 _prizeAmount){
-//     owner= msg.sender;
-//     contentPerCount=0;
-//     submissionStart= 60;
-//     submissionEnd= block.timestamp + submissionStart;
-//      requiredEntries = _requiredEntries;
-//     prizeAmount = _prizeAmount;
-// }
+    // constructor(uint256 _requiredEntries,uint256 _prizeAmount){
+    //     owner= msg.sender;
+    //     contentPerCount=0;
+    //     submissionStart= 60;
+    //     submissionEnd= block.timestamp + submissionStart;
+    //      requiredEntries = _requiredEntries;
+    //     prizeAmount = _prizeAmount;
+    // }
 
-
- constructor(
-        uint64 subscriptionId,
-        IERC20 _token
+    constructor(uint64 subscriptionId, IERC20 _token)
         // uint256 _requiredEntries,uint256 _prizeAmount
-    )
         VRFConsumerBaseV2(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed)
-        // ConfirmedOwner(msg.sender)
+    // ConfirmedOwner(msg.sender)
     {
-     token=IERC20(_token);
-     owner= msg.sender;
-    contentPerCount=0;
-    submissionStart= 60;
-    submissionEnd= block.timestamp + submissionStart;
-
-
+        token = IERC20(_token);
+        owner = msg.sender;
+        contentPerCount = 0;
+        submissionStart = 60;
+        submissionEnd = block.timestamp + submissionStart;
 
         COORDINATOR = VRFCoordinatorV2Interface(
             0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed
@@ -102,47 +94,54 @@ mapping (address=>bool) hasRegistered;
         s_subscriptionId = subscriptionId;
     }
 
+//For new participants to register
+    function Register() external {
+        require(!hasRegistered[msg.sender], "User registered already");
+        registeredUsers.push(msg.sender);
+        hasRegistered[msg.sender] = true;
+    }
+     //function for a users to login
+    function Login() external {
+        require(hasRegistered[msg.sender], "Go and register");
+        hasRegistered[msg.sender] = true;
+    }
 
-function Register() external {
-     require(!hasRegistered[msg.sender], "User registered already");
-    registeredUsers.push(msg.sender);
-     hasRegistered[msg.sender]=true;
-}
+    //The submission content  function
+    function SubmitContent(string memory _Content) external {
+        // require(block.timestamp < submissionEnd, "Submission has ended");
+        require(hasRegistered[msg.sender], "User not registered");
+        require(
+            !users[msg.sender].ContentSubmission[_Content],
+            "content already submitted"
+        );
 
-function Login()external {
-    require(hasRegistered[msg.sender],"Go and register");
-     hasRegistered[msg.sender]=true;
-}
+        users[msg.sender].TotalEntries += contentPerCount;
+        users[msg.sender].ContentSubmission[_Content] = true;
+    }
 
-function SubmitContent(string memory _Content)external {
-    require(block.timestamp < submissionEnd, "Submission has ended");
-    require(hasRegistered[msg.sender], "User not registered");
-    require(!users[msg.sender].ContentSubmission[_Content],"content already submitted");
-
-    users[msg.sender].TotalEntries += contentPerCount;
-    users[msg.sender].ContentSubmission[_Content]=true;
-
-}
-
- function setEntryPerContent(uint256 _entryPerContent) external {
+//setting the entry count after a submission of content
+    function setEntryPerContent(uint256 _entryPerContent) external {
         OnlyOwner();
         contentPerCount = _entryPerContent;
     }
 
-    function OnlyOwner()private view  {
-        require(owner==msg.sender," you are not the owner");
+//setting  only owner private function
+    function OnlyOwner() private view {
+        require(owner == msg.sender, " you are not the owner");
     }
 
+// getting total entries  of a user
     function getTotalEntries(address _users) external view returns (uint256) {
         return users[_users].TotalEntries;
     }
 
-
-     // Assumes the subscription is funded sufficiently.
+    // Assumes the subscription is funded sufficiently.
     function requestRandomWords()
         internal
-        // onlyOwner
-        returns (uint256 requestId)
+        returns (
+            // onlyOwner
+            uint256 requestId
+        )
     {
         // Will revert if subscription is not set and funded.
         requestId = COORDINATOR.requestRandomWords(
@@ -163,8 +162,7 @@ function SubmitContent(string memory _Content)external {
         return requestId;
     }
 
-
-      function fulfillRandomWords(
+    function fulfillRandomWords(
         uint256 _requestId,
         uint256[] memory _randomWords
     ) internal override {
@@ -174,18 +172,22 @@ function SubmitContent(string memory _Content)external {
         emit RequestFulfilled(_requestId, _randomWords);
     }
 
-    function getRequestStatus(
-        uint256 _requestId
-    ) external view returns (bool fulfilled, uint256[] memory randomWords) {
+    function getRequestStatus(uint256 _requestId)
+        external
+        view
+        returns (bool fulfilled, uint256[] memory randomWords)
+    {
         require(s_requests[_requestId].exists, "request not found");
         RequestStatus memory request = s_requests[_requestId];
         return (request.fulfilled, request.randomWords);
     }
 
-
-     function selectWinner() external {
+    function selectWinner() external {
         // Ensure that there are enough participants
-        require(registeredUsers.length >= 3, "There must be at least 3 participants.");
+        require(
+            registeredUsers.length >= 3,
+            "There must be at least 3 participants."
+        );
 
         // Generate a random number
         uint256 randomNumber = requestRandomWords();
@@ -198,6 +200,21 @@ function SubmitContent(string memory _Content)external {
         emit WinnerSelected(winnerAddress);
     }
 
+    function setReward(address userAddress, uint256 amount) external {
+        OnlyOwner();
+        // Ensure the contract has enough tokens to reward the user
+        require(
+            token.balanceOf(address(this)) >= amount,
+            "Insufficient contract balance"
+        );
+        ContentRewards[userAddress] = amount;
+    }
 
+    function claimReward() external {
+    uint256 reward = ContentRewards[msg.sender];
+    require(reward > 0, "No reward to claim");
+    ContentRewards[msg.sender] = 0; // Reset the reward to prevent re-claiming
+    require(token.transfer(msg.sender, reward), "Transfer failed");
 }
 
+}
